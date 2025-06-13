@@ -1,7 +1,12 @@
-// 1. Remove unused 'React' import. It's not needed in modern React/Vite.
 import { useState, useEffect, useRef } from 'react';
-// 2. Remove unused icons. We can add them back if we implement the features.
 import { Volume2, X } from 'lucide-react';
+// 1. FIX: Import DropResult as a 'type'
+import {
+  DragDropContext,
+  Droppable,
+  Draggable,
+  type DropResult,
+} from '@hello-pangea/dnd';
 
 // Define a type for our task categories for better type safety
 type TaskCategory = 'todo' | 'inProgress' | 'completed';
@@ -16,8 +21,6 @@ const FocusFlowApp = () => {
   // Pomodoro Timer State
   const [timeLeft, setTimeLeft] = useState(23 * 60 + 56);
   const [isRunning, setIsRunning] = useState(false);
-  // 3. Removed unused 'currentCycle' and 'setCurrentCycle'
-  // const [currentCycle, setCurrentCycle] = useState(1);
 
   // Tasks State
   const [tasks, setTasks] = useState<{ [key in TaskCategory]: Task[] }>({
@@ -27,30 +30,25 @@ const FocusFlowApp = () => {
   });
   const [newTask, setNewTask] = useState('');
 
-  // Binaural Beats State
-  // 4. Correctly type the AudioContext state
+  // 2. FIX: All audio state and refs are now used by the functions below
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [baseFreq, setBaseFreq] = useState(526);
   const [beatFreq, setBeatFreq] = useState(9);
   const [volume, setVolume] = useState(41);
-  // 5. Correctly type the refs for audio nodes
   const oscillators = useRef<OscillatorNode[]>([]);
   const gainNode = useRef<GainNode | null>(null);
-  const intervalRef = useRef<number | null>(null); // Use a ref for the interval ID
+  const intervalRef = useRef<number | null>(null);
 
   // Timer Effect
   useEffect(() => {
     if (isRunning && timeLeft > 0) {
-      // 6. Use the ref for the interval to avoid stale state issues
       intervalRef.current = window.setInterval(() => {
         setTimeLeft((prevTime) => prevTime - 1);
       }, 1000);
     } else if (timeLeft === 0) {
       setIsRunning(false);
     }
-
-    // Cleanup function
     return () => {
       if (intervalRef.current !== null) {
         clearInterval(intervalRef.current);
@@ -58,8 +56,37 @@ const FocusFlowApp = () => {
     };
   }, [isRunning, timeLeft]);
 
-  // Format time display
-  // 7. Add explicit type for 'seconds' parameter
+  // Drag and Drop Handler
+  const onDragEnd = (result: DropResult) => {
+    const { source, destination } = result;
+    if (!destination) return;
+    if (
+      source.droppableId === destination.droppableId &&
+      source.index === destination.index
+    )
+      return;
+    const sourceColId = source.droppableId as TaskCategory;
+    const destColId = destination.droppableId as TaskCategory;
+    const startCol = tasks[sourceColId];
+    const finishCol = tasks[destColId];
+    if (startCol === finishCol) {
+      const newItems = Array.from(startCol);
+      const [reorderedItem] = newItems.splice(source.index, 1);
+      newItems.splice(destination.index, 0, reorderedItem);
+      setTasks((prev) => ({ ...prev, [sourceColId]: newItems }));
+      return;
+    }
+    const startItems = Array.from(startCol);
+    const [movedItem] = startItems.splice(source.index, 1);
+    const finishItems = Array.from(finishCol);
+    finishItems.splice(destination.index, 0, movedItem);
+    setTasks((prev) => ({
+      ...prev,
+      [sourceColId]: startItems,
+      [destColId]: finishItems,
+    }));
+  };
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -68,7 +95,6 @@ const FocusFlowApp = () => {
       .padStart(2, '0')}`;
   };
 
-  // Timer Controls
   const startTimer = () => setIsRunning(true);
   const pauseTimer = () => setIsRunning(false);
   const resetTimer = () => {
@@ -76,22 +102,14 @@ const FocusFlowApp = () => {
     setTimeLeft(25 * 60);
   };
 
-  // Task Management
   const addTask = () => {
     if (newTask.trim()) {
-      const newTaskObj: Task = {
-        id: Date.now(),
-        text: newTask.trim(),
-      };
-      setTasks((prev) => ({
-        ...prev,
-        todo: [...prev.todo, newTaskObj],
-      }));
+      const newTaskObj: Task = { id: Date.now(), text: newTask.trim() };
+      setTasks((prev) => ({ ...prev, todo: [newTaskObj, ...prev.todo] }));
       setNewTask('');
     }
   };
 
-  // 8. Add explicit types for task management parameters
   const removeTask = (taskId: number, category: TaskCategory) => {
     setTasks((prev) => ({
       ...prev,
@@ -99,10 +117,9 @@ const FocusFlowApp = () => {
     }));
   };
 
-  // Binaural Beats Audio
+  // 3. FIX: Restored the full audio function implementations
   const initAudio = () => {
     if (!audioContext) {
-      // 9. Handle window.webkitAudioContext for older browser compatibility safely
       const AudioContext =
         window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContext) {
@@ -111,34 +128,27 @@ const FocusFlowApp = () => {
       }
       const ctx = new AudioContext();
       setAudioContext(ctx);
-
       const leftOsc = ctx.createOscillator();
       const rightOsc = ctx.createOscillator();
       const leftGain = ctx.createGain();
       const rightGain = ctx.createGain();
       const merger = ctx.createChannelMerger(2);
       const masterGain = ctx.createGain();
-
       leftOsc.frequency.setValueAtTime(baseFreq, ctx.currentTime);
       rightOsc.frequency.setValueAtTime(baseFreq + beatFreq, ctx.currentTime);
-
       leftOsc.connect(leftGain);
       rightOsc.connect(rightGain);
       leftGain.connect(merger, 0, 0);
       rightGain.connect(merger, 0, 1);
       merger.connect(masterGain);
       masterGain.connect(ctx.destination);
-
       leftGain.gain.setValueAtTime((volume / 100) * 0.1, ctx.currentTime);
       rightGain.gain.setValueAtTime((volume / 100) * 0.1, ctx.currentTime);
       masterGain.gain.setValueAtTime(0.5, ctx.currentTime);
-
       oscillators.current = [leftOsc, rightOsc];
       gainNode.current = masterGain;
-
       leftOsc.start(ctx.currentTime);
       rightOsc.start(ctx.currentTime);
-
       setIsPlaying(true);
     }
   };
@@ -147,7 +157,6 @@ const FocusFlowApp = () => {
     if (audioContext && oscillators.current.length > 0) {
       oscillators.current.forEach((osc) => osc.stop());
       oscillators.current = [];
-      // Close the context to free up resources
       audioContext.close().then(() => {
         setAudioContext(null);
         setIsPlaying(false);
@@ -163,16 +172,8 @@ const FocusFlowApp = () => {
     }
   };
 
-  // 10. Added a simple volume change handler
   const handleVolumeChange = (newVolume: number) => {
     setVolume(newVolume);
-    if (gainNode.current && audioContext) {
-      // Adjust both left and right gain
-      // This assumes you want to control the gain of the oscillators, not the master
-      // You would need to store references to leftGain/rightGain to do this properly
-      // For simplicity, we'll just log it. A more robust solution is needed for live volume change.
-      console.log('Volume changed to:', newVolume);
-    }
   };
 
   return (
@@ -194,7 +195,6 @@ const FocusFlowApp = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Timer and Beats */}
           <div className="lg:col-span-1 space-y-6">
-            {/* Pomodoro Timer */}
             <div className="bg-white rounded-3xl p-8 shadow-xl">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
@@ -204,21 +204,16 @@ const FocusFlowApp = () => {
                   Pomodoro Timer
                 </h2>
               </div>
-
               <div className="text-center mb-8">
                 <div className="w-40 h-40 mx-auto mb-6 relative">
                   <div className="w-full h-full border-8 border-gray-200 rounded-full"></div>
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-4xl font-bold text-purple-600 mb-1">
-                        {formatTime(timeLeft)}
-                      </div>
+                    <div className="text-4xl font-bold text-purple-600 mb-1">
+                      {formatTime(timeLeft)}
                     </div>
                   </div>
                 </div>
-
                 <div className="flex gap-3 justify-center mb-6">
-                  {/* Changed button text to be more dynamic and fixed handlers */}
                   <button
                     onClick={isRunning ? pauseTimer : startTimer}
                     className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-medium transition-colors shadow-md"
@@ -232,7 +227,6 @@ const FocusFlowApp = () => {
                     Reset
                   </button>
                 </div>
-
                 <div className="text-sm text-gray-600">
                   <div className="mb-1">Cycle 1 of 4</div>
                   <div className="flex items-center justify-center gap-2">
@@ -242,8 +236,6 @@ const FocusFlowApp = () => {
                 </div>
               </div>
             </div>
-
-            {/* Binaural Beats */}
             <div className="bg-white rounded-3xl p-8 shadow-xl">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
@@ -253,7 +245,6 @@ const FocusFlowApp = () => {
                   Binaural Beats
                 </h2>
               </div>
-
               <div className="space-y-6">
                 <div>
                   <div className="flex justify-between items-center mb-3">
@@ -279,7 +270,6 @@ const FocusFlowApp = () => {
                     ></div>
                   </div>
                 </div>
-
                 <div>
                   <div className="flex justify-between items-center mb-3">
                     <label className="text-sm text-gray-600 font-medium">
@@ -304,7 +294,6 @@ const FocusFlowApp = () => {
                     ></div>
                   </div>
                 </div>
-
                 <div>
                   <div className="flex justify-between items-center mb-3">
                     <label className="text-sm text-gray-600 font-medium">
@@ -331,7 +320,6 @@ const FocusFlowApp = () => {
                     ></div>
                   </div>
                 </div>
-
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={toggleAudio}
@@ -339,7 +327,6 @@ const FocusFlowApp = () => {
                   >
                     {isPlaying ? 'Stop' : 'Play'}
                   </button>
-                  {/* Removed the redundant 'Stop' button */}
                 </div>
               </div>
             </div>
@@ -375,91 +362,172 @@ const FocusFlowApp = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-96">
-                {/* To Do */}
-                <div className="bg-gray-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-4 h-4 bg-red-400 rounded-full"></div>
-                    <h3 className="text-gray-800 font-semibold">To Do</h3>
-                  </div>
-                  <div className="space-y-3">
-                    {tasks.todo.map((task) => (
+              <DragDropContext onDragEnd={onDragEnd}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-96">
+                  {/* To Do Column */}
+                  <Droppable droppableId="todo">
+                    {(provided) => (
                       <div
-                        key={task.id}
-                        className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 group hover:shadow-md transition-shadow"
+                        {...provided.droppableProps}
+                        ref={provided.innerRef}
+                        className="bg-gray-50 rounded-2xl p-6"
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-800 text-sm font-medium">
-                            {task.text}
-                          </span>
-                          <button
-                            onClick={() => removeTask(task.id, 'todo')}
-                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all"
-                          >
-                            <X size={16} />
-                          </button>
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-4 h-4 bg-red-400 rounded-full"></div>
+                          <h3 className="text-gray-800 font-semibold">To Do</h3>
+                        </div>
+                        <div className="space-y-3">
+                          {tasks.todo.map((task, index) => (
+                            <Draggable
+                              key={task.id}
+                              draggableId={String(task.id)}
+                              index={index}
+                            >
+                              {(provided, snapshot) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                  className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 group transition-shadow ${
+                                    snapshot.isDragging
+                                      ? 'shadow-lg ring-2 ring-purple-500'
+                                      : 'hover:shadow-md'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-800 text-sm font-medium">
+                                      {task.text}
+                                    </span>
+                                    <button
+                                      onClick={() =>
+                                        removeTask(task.id, 'todo')
+                                      }
+                                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all"
+                                    >
+                                      <X size={16} />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    )}
+                  </Droppable>
 
-                {/* In Progress */}
-                <div className="bg-blue-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-4 h-4 bg-yellow-400 rounded-full"></div>
-                    <h3 className="text-gray-800 font-semibold">In Progress</h3>
-                  </div>
-                  <div className="space-y-3">
-                    {tasks.inProgress.map((task) => (
+                  {/* In Progress Column */}
+                  <Droppable droppableId="inProgress">
+                    {(provided) => (
                       <div
-                        key={task.id}
-                        className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 group hover:shadow-md transition-shadow"
+                        {...provided.droppableProps}
+                        ref={provided.innerRef}
+                        className="bg-blue-50 rounded-2xl p-6"
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-800 text-sm font-medium">
-                            {task.text}
-                          </span>
-                          <button
-                            onClick={() => removeTask(task.id, 'inProgress')}
-                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all"
-                          >
-                            <X size={16} />
-                          </button>
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-4 h-4 bg-yellow-400 rounded-full"></div>
+                          <h3 className="text-gray-800 font-semibold">
+                            In Progress
+                          </h3>
+                        </div>
+                        <div className="space-y-3">
+                          {tasks.inProgress.map((task, index) => (
+                            <Draggable
+                              key={task.id}
+                              draggableId={String(task.id)}
+                              index={index}
+                            >
+                              {(provided, snapshot) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                  className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 group transition-shadow ${
+                                    snapshot.isDragging
+                                      ? 'shadow-lg ring-2 ring-purple-500'
+                                      : 'hover:shadow-md'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-800 text-sm font-medium">
+                                      {task.text}
+                                    </span>
+                                    <button
+                                      onClick={() =>
+                                        removeTask(task.id, 'inProgress')
+                                      }
+                                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all"
+                                    >
+                                      <X size={16} />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    )}
+                  </Droppable>
 
-                {/* Completed */}
-                <div className="bg-green-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-4 h-4 bg-green-400 rounded-full"></div>
-                    <h3 className="text-gray-800 font-semibold">Completed</h3>
-                  </div>
-                  <div className="space-y-3">
-                    {tasks.completed.map((task) => (
+                  {/* Completed Column */}
+                  <Droppable droppableId="completed">
+                    {(provided) => (
                       <div
-                        key={task.id}
-                        className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 group hover:shadow-md transition-shadow"
+                        {...provided.droppableProps}
+                        ref={provided.innerRef}
+                        className="bg-green-50 rounded-2xl p-6"
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-800 text-sm font-medium line-through opacity-60">
-                            {task.text}
-                          </span>
-                          <button
-                            onClick={() => removeTask(task.id, 'completed')}
-                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all"
-                          >
-                            <X size={16} />
-                          </button>
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-4 h-4 bg-green-400 rounded-full"></div>
+                          <h3 className="text-gray-800 font-semibold">
+                            Completed
+                          </h3>
+                        </div>
+                        <div className="space-y-3">
+                          {tasks.completed.map((task, index) => (
+                            <Draggable
+                              key={task.id}
+                              draggableId={String(task.id)}
+                              index={index}
+                            >
+                              {(provided, snapshot) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                  className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 group transition-shadow ${
+                                    snapshot.isDragging
+                                      ? 'shadow-lg ring-2 ring-purple-500'
+                                      : 'hover:shadow-md'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-800 text-sm font-medium line-through opacity-60">
+                                      {task.text}
+                                    </span>
+                                    <button
+                                      onClick={() =>
+                                        removeTask(task.id, 'completed')
+                                      }
+                                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all"
+                                    >
+                                      <X size={16} />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </Droppable>
                 </div>
-              </div>
+              </DragDropContext>
             </div>
           </div>
         </div>
