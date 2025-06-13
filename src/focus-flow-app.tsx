@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { Volume2, X } from 'lucide-react';
-// 1. FIX: Import DropResult as a 'type'
 import {
   DragDropContext,
   Droppable,
@@ -8,10 +7,8 @@ import {
   type DropResult,
 } from '@hello-pangea/dnd';
 
-// Define a type for our task categories for better type safety
+// Define types for tasks and categories
 type TaskCategory = 'todo' | 'inProgress' | 'completed';
-
-// Define a type for a single task object
 interface Task {
   id: number;
   text: string;
@@ -21,6 +18,7 @@ const FocusFlowApp = () => {
   // Pomodoro Timer State
   const [timeLeft, setTimeLeft] = useState(23 * 60 + 56);
   const [isRunning, setIsRunning] = useState(false);
+  const intervalRef = useRef<number | null>(null);
 
   // Tasks State
   const [tasks, setTasks] = useState<{ [key in TaskCategory]: Task[] }>({
@@ -30,15 +28,39 @@ const FocusFlowApp = () => {
   });
   const [newTask, setNewTask] = useState('');
 
-  // 2. FIX: All audio state and refs are now used by the functions below
+  // Binaural Beats State and Refs
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [baseFreq, setBaseFreq] = useState(526);
   const [beatFreq, setBeatFreq] = useState(9);
   const [volume, setVolume] = useState(41);
-  const oscillators = useRef<OscillatorNode[]>([]);
-  const gainNode = useRef<GainNode | null>(null);
-  const intervalRef = useRef<number | null>(null);
+  const leftOsc = useRef<OscillatorNode | null>(null);
+  const rightOsc = useRef<OscillatorNode | null>(null);
+  const masterGain = useRef<GainNode | null>(null);
+
+  // --- useEffects for Live Audio Updates ---
+  useEffect(() => {
+    if (isPlaying && leftOsc.current && rightOsc.current && audioContext) {
+      leftOsc.current.frequency.setValueAtTime(
+        baseFreq,
+        audioContext.currentTime
+      );
+      rightOsc.current.frequency.setValueAtTime(
+        baseFreq + beatFreq,
+        audioContext.currentTime
+      );
+    }
+  }, [baseFreq, beatFreq, isPlaying, audioContext]);
+
+  useEffect(() => {
+    if (isPlaying && masterGain.current && audioContext) {
+      const gainValue = (volume / 100) ** 2; // Logarithmic scaling for perceived loudness
+      masterGain.current.gain.setValueAtTime(
+        gainValue,
+        audioContext.currentTime
+      );
+    }
+  }, [volume, isPlaying, audioContext]);
 
   // Timer Effect
   useEffect(() => {
@@ -50,42 +72,11 @@ const FocusFlowApp = () => {
       setIsRunning(false);
     }
     return () => {
-      if (intervalRef.current !== null) {
-        clearInterval(intervalRef.current);
-      }
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [isRunning, timeLeft]);
 
-  // Drag and Drop Handler
-  const onDragEnd = (result: DropResult) => {
-    const { source, destination } = result;
-    if (!destination) return;
-    if (
-      source.droppableId === destination.droppableId &&
-      source.index === destination.index
-    )
-      return;
-    const sourceColId = source.droppableId as TaskCategory;
-    const destColId = destination.droppableId as TaskCategory;
-    const startCol = tasks[sourceColId];
-    const finishCol = tasks[destColId];
-    if (startCol === finishCol) {
-      const newItems = Array.from(startCol);
-      const [reorderedItem] = newItems.splice(source.index, 1);
-      newItems.splice(destination.index, 0, reorderedItem);
-      setTasks((prev) => ({ ...prev, [sourceColId]: newItems }));
-      return;
-    }
-    const startItems = Array.from(startCol);
-    const [movedItem] = startItems.splice(source.index, 1);
-    const finishItems = Array.from(finishCol);
-    finishItems.splice(destination.index, 0, movedItem);
-    setTasks((prev) => ({
-      ...prev,
-      [sourceColId]: startItems,
-      [destColId]: finishItems,
-    }));
-  };
+  // --- All App Functions ---
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -117,49 +108,82 @@ const FocusFlowApp = () => {
     }));
   };
 
-  // 3. FIX: Restored the full audio function implementations
-  const initAudio = () => {
-    if (!audioContext) {
-      const AudioContext =
-        window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) {
-        console.error('Browser does not support Web Audio API');
-        return;
-      }
-      const ctx = new AudioContext();
-      setAudioContext(ctx);
-      const leftOsc = ctx.createOscillator();
-      const rightOsc = ctx.createOscillator();
-      const leftGain = ctx.createGain();
-      const rightGain = ctx.createGain();
-      const merger = ctx.createChannelMerger(2);
-      const masterGain = ctx.createGain();
-      leftOsc.frequency.setValueAtTime(baseFreq, ctx.currentTime);
-      rightOsc.frequency.setValueAtTime(baseFreq + beatFreq, ctx.currentTime);
-      leftOsc.connect(leftGain);
-      rightOsc.connect(rightGain);
-      leftGain.connect(merger, 0, 0);
-      rightGain.connect(merger, 0, 1);
-      merger.connect(masterGain);
-      masterGain.connect(ctx.destination);
-      leftGain.gain.setValueAtTime((volume / 100) * 0.1, ctx.currentTime);
-      rightGain.gain.setValueAtTime((volume / 100) * 0.1, ctx.currentTime);
-      masterGain.gain.setValueAtTime(0.5, ctx.currentTime);
-      oscillators.current = [leftOsc, rightOsc];
-      gainNode.current = masterGain;
-      leftOsc.start(ctx.currentTime);
-      rightOsc.start(ctx.currentTime);
-      setIsPlaying(true);
+  const onDragEnd = (result: DropResult) => {
+    const { source, destination } = result;
+    if (!destination) return;
+    if (
+      source.droppableId === destination.droppableId &&
+      source.index === destination.index
+    )
+      return;
+    const sourceColId = source.droppableId as TaskCategory;
+    const destColId = destination.droppableId as TaskCategory;
+    const startCol = tasks[sourceColId];
+    const finishCol = tasks[destColId];
+    if (startCol === finishCol) {
+      const newItems = Array.from(startCol);
+      const [reorderedItem] = newItems.splice(source.index, 1);
+      newItems.splice(destination.index, 0, reorderedItem);
+      setTasks((prev) => ({ ...prev, [sourceColId]: newItems }));
+      return;
     }
+    const startItems = Array.from(startCol);
+    const [movedItem] = startItems.splice(source.index, 1);
+    const finishItems = Array.from(finishCol);
+    finishItems.splice(destination.index, 0, movedItem);
+    setTasks((prev) => ({
+      ...prev,
+      [sourceColId]: startItems,
+      [destColId]: finishItems,
+    }));
+  };
+
+  const initAudio = () => {
+    const AudioContext =
+      window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) {
+      console.error('Browser does not support Web Audio API');
+      return;
+    }
+    const ctx = new AudioContext();
+    const gainValue = (volume / 100) ** 2;
+
+    masterGain.current = ctx.createGain();
+    masterGain.current.gain.setValueAtTime(gainValue, ctx.currentTime);
+    masterGain.current.connect(ctx.destination);
+
+    const merger = ctx.createChannelMerger(2);
+    merger.connect(masterGain.current);
+
+    leftOsc.current = ctx.createOscillator();
+    leftOsc.current.frequency.setValueAtTime(baseFreq, ctx.currentTime);
+    const leftGain = ctx.createGain();
+    leftGain.connect(merger, 0, 0);
+    leftOsc.current.connect(leftGain);
+
+    rightOsc.current = ctx.createOscillator();
+    rightOsc.current.frequency.setValueAtTime(
+      baseFreq + beatFreq,
+      ctx.currentTime
+    );
+    const rightGain = ctx.createGain();
+    rightGain.connect(merger, 0, 1);
+    rightOsc.current.connect(rightGain);
+
+    leftOsc.current.start(ctx.currentTime);
+    rightOsc.current.start(ctx.currentTime);
+    setAudioContext(ctx);
+    setIsPlaying(true);
   };
 
   const stopAudio = () => {
-    if (audioContext && oscillators.current.length > 0) {
-      oscillators.current.forEach((osc) => osc.stop());
-      oscillators.current = [];
+    if (audioContext) {
       audioContext.close().then(() => {
         setAudioContext(null);
         setIsPlaying(false);
+        leftOsc.current = null;
+        rightOsc.current = null;
+        masterGain.current = null;
       });
     }
   };
@@ -170,10 +194,6 @@ const FocusFlowApp = () => {
     } else {
       initAudio();
     }
-  };
-
-  const handleVolumeChange = (newVolume: number) => {
-    setVolume(newVolume);
   };
 
   return (
@@ -309,9 +329,7 @@ const FocusFlowApp = () => {
                       min="0"
                       max="100"
                       value={volume}
-                      onChange={(e) =>
-                        handleVolumeChange(Number(e.target.value))
-                      }
+                      onChange={(e) => setVolume(Number(e.target.value))}
                       className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer slider"
                     />
                     <div
@@ -364,7 +382,6 @@ const FocusFlowApp = () => {
 
               <DragDropContext onDragEnd={onDragEnd}>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-96">
-                  {/* To Do Column */}
                   <Droppable droppableId="todo">
                     {(provided) => (
                       <div
@@ -416,8 +433,6 @@ const FocusFlowApp = () => {
                       </div>
                     )}
                   </Droppable>
-
-                  {/* In Progress Column */}
                   <Droppable droppableId="inProgress">
                     {(provided) => (
                       <div
@@ -471,8 +486,6 @@ const FocusFlowApp = () => {
                       </div>
                     )}
                   </Droppable>
-
-                  {/* Completed Column */}
                   <Droppable droppableId="completed">
                     {(provided) => (
                       <div
