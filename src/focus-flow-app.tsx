@@ -111,6 +111,14 @@ const FocusFlowApp = () => {
     }));
   };
 
+  const clearAllTasks = () => {
+    if (window.confirm('Are you sure you want to clear all tasks? This action cannot be undone.')) {
+      setTasks({ todo: [], inProgress: [], completed: [] });
+      // Ensure localStorage is updated
+      localStorage.setItem('tasks', JSON.stringify({ todo: [], inProgress: [], completed: [] }));
+    }
+  };
+
   const onDragEnd = (result: DropResult) => {
     const { source, destination } = result;
     if (!destination) return;
@@ -379,6 +387,12 @@ const FocusFlowApp = () => {
                     className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-xl font-medium transition-colors shadow-md"
                   >
                     Add
+                  </button>
+                  <button
+                    onClick={clearAllTasks}
+                    className="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-xl font-medium transition-colors shadow-md"
+                  >
+                    Clear All
                   </button>
                 </div>
               </div>
