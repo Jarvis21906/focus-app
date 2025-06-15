@@ -21,10 +21,9 @@ const FocusFlowApp = () => {
   const intervalRef = useRef<number | null>(null);
 
   // Tasks State
-  const [tasks, setTasks] = useState<{ [key in TaskCategory]: Task[] }>({
-    todo: [],
-    inProgress: [],
-    completed: [],
+  const [tasks, setTasks] = useState<{ [key in TaskCategory]: Task[] }>(() => {
+    const savedTasks = localStorage.getItem('tasks');
+    return savedTasks ? JSON.parse(savedTasks) : { todo: [], inProgress: [], completed: [] };
   });
   const [newTask, setNewTask] = useState('');
 
@@ -75,6 +74,10 @@ const FocusFlowApp = () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [isRunning, timeLeft]);
+
+  useEffect(() => {
+    localStorage.setItem('tasks', JSON.stringify(tasks));
+  }, [tasks]);
 
   // --- All App Functions ---
 
