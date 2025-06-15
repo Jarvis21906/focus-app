@@ -16,7 +16,7 @@ interface Task {
 
 const FocusFlowApp = () => {
   // Pomodoro Timer State
-  const [timeLeft, setTimeLeft] = useState(23 * 60 + 56);
+  const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
   const intervalRef = useRef<number | null>(null);
 
@@ -31,8 +31,8 @@ const FocusFlowApp = () => {
   // Binaural Beats State and Refs
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [baseFreq, setBaseFreq] = useState(526);
-  const [beatFreq, setBeatFreq] = useState(9);
+  const [baseFreq, setBaseFreq] = useState(432);
+  const [beatFreq, setBeatFreq] = useState(35);
   const [volume, setVolume] = useState(41);
   const leftOsc = useRef<OscillatorNode | null>(null);
   const rightOsc = useRef<OscillatorNode | null>(null);
