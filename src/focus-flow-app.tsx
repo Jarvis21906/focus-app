@@ -22,9 +22,9 @@ const FocusFlowApp = () => {
 
   // Tasks State
   const [tasks, setTasks] = useState<{ [key in TaskCategory]: Task[] }>({
-    todo: [{ id: 1, text: 'Review morning emails' }],
-    inProgress: [{ id: 2, text: 'Prepare presentation' }],
-    completed: [{ id: 3, text: 'Call with team' }],
+    todo: [],
+    inProgress: [],
+    completed: [],
   });
   const [newTask, setNewTask] = useState('');
 
