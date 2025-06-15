@@ -387,7 +387,7 @@ const FocusFlowApp = () => {
                       <div
                         {...provided.droppableProps}
                         ref={provided.innerRef}
-                        className="bg-gray-50 rounded-2xl p-6"
+                        className="bg-purple-100 rounded-2xl p-6"
                       >
                         <div className="flex items-center gap-3 mb-6">
                           <div className="w-4 h-4 bg-red-400 rounded-full"></div>
