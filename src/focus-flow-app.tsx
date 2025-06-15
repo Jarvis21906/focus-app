@@ -216,7 +216,7 @@ const FocusFlowApp = () => {
             <div className="w-10 h-10 bg-gradient-to-r from-pink-400 to-red-400 rounded-full flex items-center justify-center shadow-lg">
               <div className="w-5 h-5 bg-white rounded-full"></div>
             </div>
-            <h1 className="text-4xl font-bold text-white">Focus Flow</h1>
+            <h1 className="text-4xl font-bold text-white">PomoMind</h1>
           </div>
           <p className="text-purple-100 text-lg">
             Boost your productivity with Pomodoro and Binaural Beats
