@@ -14,10 +14,13 @@ interface Task {
   text: string;
 }
 
+type SessionType = 'work' | 'study' | 'break' | 'exercise' | 'meditation';
+
 const FocusFlowApp = () => {
   // Pomodoro Timer State
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
+  const [sessionType, setSessionType] = useState<SessionType>('work');
   const intervalRef = useRef<number | null>(null);
 
   // Tasks State
@@ -28,7 +31,7 @@ const FocusFlowApp = () => {
   const [newTask, setNewTask] = useState('');
 
   // Binaural Beats State and Refs
-  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [baseFreq, setBaseFreq] = useState(432);
   const [beatFreq, setBeatFreq] = useState(35);
@@ -36,32 +39,41 @@ const FocusFlowApp = () => {
   const leftOsc = useRef<OscillatorNode | null>(null);
   const rightOsc = useRef<OscillatorNode | null>(null);
   const masterGain = useRef<GainNode | null>(null);
+  const unlockAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Initialize the unlock audio element
+  useEffect(() => {
+    // Create a silent audio element to help unlock audio on mobile
+    const audio = new Audio();
+    audio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAASAAAeMwAUFBQUFCIiIiIiIjAwMDAwPz8/Pz8/TU1NTU1NW1tbW1tbaGhoaGhoaHd3d3d3d4aGhoaGhpSUlJSUlKGhoaGhoa+vr6+vr7+/v7+/v8rKysrKytTU1NTU1N/f39/f3+7u7u7u7v///////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAYAAAAAAAAAHjOZTf9C//MUZAAAAAGkAAAAAAAAA0gAAAAATEFN//MUZAMAAAGkAAAAAAAAA0gAAAAARTEFN//MUZAYAAAGkAAAAAAAAA0gAAAAARTEFN//MUZAkAAAGkAAAAAAAAA0gAAAAARTEFN';
+    audio.loop = true;
+    unlockAudioRef.current = audio;
+    return () => {
+      if (unlockAudioRef.current) {
+        unlockAudioRef.current.pause();
+        unlockAudioRef.current = null;
+      }
+    };
+  }, []);
 
   // --- useEffects for Live Audio Updates ---
   useEffect(() => {
-    if (isPlaying && leftOsc.current && rightOsc.current && audioContext) {
-      leftOsc.current.frequency.setValueAtTime(
-        baseFreq,
-        audioContext.currentTime
-      );
-      rightOsc.current.frequency.setValueAtTime(
-        baseFreq + beatFreq,
-        audioContext.currentTime
-      );
+    if (isPlaying && leftOsc.current && rightOsc.current && audioContextRef.current) {
+      const { currentTime } = audioContextRef.current;
+      leftOsc.current.frequency.setValueAtTime(baseFreq, currentTime);
+      rightOsc.current.frequency.setValueAtTime(baseFreq + beatFreq, currentTime);
     }
-  }, [baseFreq, beatFreq, isPlaying, audioContext]);
+  }, [baseFreq, beatFreq, isPlaying]);
 
   useEffect(() => {
-    if (isPlaying && masterGain.current && audioContext) {
-      const gainValue = (volume / 100) ** 2; // Logarithmic scaling for perceived loudness
-      masterGain.current.gain.setValueAtTime(
-        gainValue,
-        audioContext.currentTime
-      );
+    if (isPlaying && masterGain.current && audioContextRef.current) {
+      const { currentTime } = audioContextRef.current;
+      const gainValue = (volume / 100) ** 2; // Logarithmic scaling
+      masterGain.current.gain.setValueAtTime(gainValue, currentTime);
     }
-  }, [volume, isPlaying, audioContext]);
+  }, [volume, isPlaying]);
 
-  // Timer Effect
+  // --- Timer Effect ---
   useEffect(() => {
     if (isRunning && timeLeft > 0) {
       intervalRef.current = window.setInterval(() => {
@@ -75,6 +87,7 @@ const FocusFlowApp = () => {
     };
   }, [isRunning, timeLeft]);
 
+  // --- LocalStorage Effect for Tasks ---
   useEffect(() => {
     localStorage.setItem('tasks', JSON.stringify(tasks));
   }, [tasks]);
@@ -84,9 +97,7 @@ const FocusFlowApp = () => {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs
-      .toString()
-      .padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   const startTimer = () => setIsRunning(true);
@@ -114,7 +125,6 @@ const FocusFlowApp = () => {
   const clearAllTasks = () => {
     if (window.confirm('Are you sure you want to clear all tasks? This action cannot be undone.')) {
       setTasks({ todo: [], inProgress: [], completed: [] });
-      // Ensure localStorage is updated
       localStorage.setItem('tasks', JSON.stringify({ todo: [], inProgress: [], completed: [] }));
     }
   };
@@ -122,11 +132,7 @@ const FocusFlowApp = () => {
   const onDragEnd = (result: DropResult) => {
     const { source, destination } = result;
     if (!destination) return;
-    if (
-      source.droppableId === destination.droppableId &&
-      source.index === destination.index
-    )
-      return;
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return;
     const sourceColId = source.droppableId as TaskCategory;
     const destColId = destination.droppableId as TaskCategory;
     const startCol = tasks[sourceColId];
@@ -136,27 +142,71 @@ const FocusFlowApp = () => {
       const [reorderedItem] = newItems.splice(source.index, 1);
       newItems.splice(destination.index, 0, reorderedItem);
       setTasks((prev) => ({ ...prev, [sourceColId]: newItems }));
-      return;
+    } else {
+      const startItems = Array.from(startCol);
+      const [movedItem] = startItems.splice(source.index, 1);
+      const finishItems = Array.from(finishCol);
+      finishItems.splice(destination.index, 0, movedItem);
+      setTasks((prev) => ({
+        ...prev,
+        [sourceColId]: startItems,
+        [destColId]: finishItems,
+      }));
     }
-    const startItems = Array.from(startCol);
-    const [movedItem] = startItems.splice(source.index, 1);
-    const finishItems = Array.from(finishCol);
-    finishItems.splice(destination.index, 0, movedItem);
-    setTasks((prev) => ({
-      ...prev,
-      [sourceColId]: startItems,
-      [destColId]: finishItems,
-    }));
   };
 
-  const initAudio = () => {
-    const AudioContext =
-      window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContext) {
-      console.error('Browser does not support Web Audio API');
+  // A simpler, synchronous function to stop all audio and clean up.
+  const stopAudio = () => {
+    // Check if oscillators exist and are running, then stop them.
+    if (leftOsc.current) {
+      leftOsc.current.stop();
+      leftOsc.current.disconnect();
+      leftOsc.current = null;
+    }
+    if (rightOsc.current) {
+      rightOsc.current.stop();
+      rightOsc.current.disconnect();
+      rightOsc.current = null;
+    }
+    // Disconnect the master gain to silence everything.
+    if (masterGain.current) {
+      masterGain.current.disconnect();
+      masterGain.current = null;
+    }
+    // Set the state to reflect that audio is stopped.
+    setIsPlaying(false);
+  };
+
+  // An async function specifically for starting the audio.
+  const startAudio = async () => {
+    // 1. Get or create the AudioContext.
+    if (!audioContextRef.current) {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) {
+        console.error('Browser does not support Web Audio API');
+        return;
+      }
+      audioContextRef.current = new AudioContext();
+    }
+    
+    const ctx = audioContextRef.current;
+
+    // 2. Forcefully resume the context if it's suspended. This is the key.
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+
+    // 3. DEFENSIVE CHECK: If the context is *still* not running after resume,
+    // it means the browser blocked it. We cannot proceed.
+    if (ctx.state !== 'running') {
+      console.error('AudioContext could not be resumed. User interaction might be required.');
       return;
     }
-    const ctx = new AudioContext();
+
+    // 4. If we are here, the context is running. Now, build the audio graph.
+    // Ensure everything is clean before we start.
+    stopAudio();
+
     const gainValue = (volume / 100) ** 2;
 
     masterGain.current = ctx.createGain();
@@ -180,30 +230,20 @@ const FocusFlowApp = () => {
     const rightGain = ctx.createGain();
     rightGain.connect(merger, 0, 1);
     rightOsc.current.connect(rightGain);
-
-    leftOsc.current.start(ctx.currentTime);
-    rightOsc.current.start(ctx.currentTime);
-    setAudioContext(ctx);
+    
+    leftOsc.current.start();
+    rightOsc.current.start();
+    
+    // 5. Finally, update the state.
     setIsPlaying(true);
   };
 
-  const stopAudio = () => {
-    if (audioContext) {
-      audioContext.close().then(() => {
-        setAudioContext(null);
-        setIsPlaying(false);
-        leftOsc.current = null;
-        rightOsc.current = null;
-        masterGain.current = null;
-      });
-    }
-  };
-
+  // The main toggle function becomes a simple dispatcher.
   const toggleAudio = () => {
     if (isPlaying) {
       stopAudio();
     } else {
-      initAudio();
+      startAudio();
     }
   };
 
@@ -260,10 +300,21 @@ const FocusFlowApp = () => {
                 </div>
                 <div className="text-sm text-gray-600">
                   <div className="mb-1">Cycle 1 of 4</div>
-                  <div className="flex items-center justify-center gap-2">
+                  <div className="flex items-center justify-center gap-2 mb-3">
                     <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                     <span>Work Session</span>
                   </div>
+                  <select
+                    value={sessionType}
+                    onChange={(e) => setSessionType(e.target.value as SessionType)}
+                    className="bg-white border border-gray-200 text-gray-700 py-2 px-4 rounded-lg focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                  >
+                    <option value="work">Work</option>
+                    <option value="study">Study</option>
+                    <option value="break">Break</option>
+                    <option value="exercise">Exercise</option>
+                    <option value="meditation">Meditation</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -364,7 +415,7 @@ const FocusFlowApp = () => {
           {/* Right Column - Task Manager */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-3xl p-8 shadow-xl h-full">
-              <div className="flex items-center justify-between mb-8">
+              <div className="flex flex-col sm:flex-row items-center justify-between mb-8 gap-4">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
                     <div className="w-4 h-4 bg-white rounded-full"></div>
@@ -373,14 +424,14 @@ const FocusFlowApp = () => {
                     Task Manager
                   </h2>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3 justify-center">
                   <input
                     type="text"
                     placeholder="Add new task..."
                     value={newTask}
                     onChange={(e) => setNewTask(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && addTask()}
-                    className="px-4 py-2 bg-gray-50 text-gray-800 placeholder-gray-500 rounded-xl border border-gray-200 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                    className="px-4 py-2 bg-gray-50 text-gray-800 placeholder-gray-500 rounded-xl border border-gray-200 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 w-full sm:w-auto"
                   />
                   <button
                     onClick={addTask}
@@ -398,13 +449,13 @@ const FocusFlowApp = () => {
               </div>
 
               <DragDropContext onDragEnd={onDragEnd}>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-96">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <Droppable droppableId="todo">
                     {(provided) => (
                       <div
                         {...provided.droppableProps}
                         ref={provided.innerRef}
-                        className="bg-purple-100 rounded-2xl p-6"
+                        className="bg-purple-100 rounded-2xl p-6 min-h-[200px]"
                       >
                         <div className="flex items-center gap-3 mb-6">
                           <div className="w-4 h-4 bg-red-400 rounded-full"></div>
@@ -412,32 +463,19 @@ const FocusFlowApp = () => {
                         </div>
                         <div className="space-y-3">
                           {tasks.todo.map((task, index) => (
-                            <Draggable
-                              key={task.id}
-                              draggableId={String(task.id)}
-                              index={index}
-                            >
+                            <Draggable key={task.id} draggableId={String(task.id)} index={index}>
                               {(provided, snapshot) => (
                                 <div
                                   ref={provided.innerRef}
                                   {...provided.draggableProps}
                                   {...provided.dragHandleProps}
                                   className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 group transition-shadow ${
-                                    snapshot.isDragging
-                                      ? 'shadow-lg ring-2 ring-purple-500'
-                                      : 'hover:shadow-md'
+                                    snapshot.isDragging ? 'shadow-lg ring-2 ring-purple-500' : 'hover:shadow-md'
                                   }`}
                                 >
                                   <div className="flex items-center justify-between">
-                                    <span className="text-gray-800 text-sm font-medium">
-                                      {task.text}
-                                    </span>
-                                    <button
-                                      onClick={() =>
-                                        removeTask(task.id, 'todo')
-                                      }
-                                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all"
-                                    >
+                                    <span className="text-gray-800 text-sm font-medium">{task.text}</span>
+                                    <button onClick={() => removeTask(task.id, 'todo')} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all">
                                       <X size={16} />
                                     </button>
                                   </div>
@@ -455,42 +493,27 @@ const FocusFlowApp = () => {
                       <div
                         {...provided.droppableProps}
                         ref={provided.innerRef}
-                        className="bg-blue-50 rounded-2xl p-6"
+                        className="bg-blue-50 rounded-2xl p-6 min-h-[200px]"
                       >
                         <div className="flex items-center gap-3 mb-6">
                           <div className="w-4 h-4 bg-yellow-400 rounded-full"></div>
-                          <h3 className="text-gray-800 font-semibold">
-                            In Progress
-                          </h3>
+                          <h3 className="text-gray-800 font-semibold">In Progress</h3>
                         </div>
                         <div className="space-y-3">
                           {tasks.inProgress.map((task, index) => (
-                            <Draggable
-                              key={task.id}
-                              draggableId={String(task.id)}
-                              index={index}
-                            >
+                            <Draggable key={task.id} draggableId={String(task.id)} index={index}>
                               {(provided, snapshot) => (
                                 <div
                                   ref={provided.innerRef}
                                   {...provided.draggableProps}
                                   {...provided.dragHandleProps}
                                   className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 group transition-shadow ${
-                                    snapshot.isDragging
-                                      ? 'shadow-lg ring-2 ring-purple-500'
-                                      : 'hover:shadow-md'
+                                    snapshot.isDragging ? 'shadow-lg ring-2 ring-purple-500' : 'hover:shadow-md'
                                   }`}
                                 >
                                   <div className="flex items-center justify-between">
-                                    <span className="text-gray-800 text-sm font-medium">
-                                      {task.text}
-                                    </span>
-                                    <button
-                                      onClick={() =>
-                                        removeTask(task.id, 'inProgress')
-                                      }
-                                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all"
-                                    >
+                                    <span className="text-gray-800 text-sm font-medium">{task.text}</span>
+                                    <button onClick={() => removeTask(task.id, 'inProgress')} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all">
                                       <X size={16} />
                                     </button>
                                   </div>
@@ -508,42 +531,27 @@ const FocusFlowApp = () => {
                       <div
                         {...provided.droppableProps}
                         ref={provided.innerRef}
-                        className="bg-green-50 rounded-2xl p-6"
+                        className="bg-green-50 rounded-2xl p-6 min-h-[200px]"
                       >
                         <div className="flex items-center gap-3 mb-6">
                           <div className="w-4 h-4 bg-green-400 rounded-full"></div>
-                          <h3 className="text-gray-800 font-semibold">
-                            Completed
-                          </h3>
+                          <h3 className="text-gray-800 font-semibold">Completed</h3>
                         </div>
                         <div className="space-y-3">
                           {tasks.completed.map((task, index) => (
-                            <Draggable
-                              key={task.id}
-                              draggableId={String(task.id)}
-                              index={index}
-                            >
+                            <Draggable key={task.id} draggableId={String(task.id)} index={index}>
                               {(provided, snapshot) => (
                                 <div
                                   ref={provided.innerRef}
                                   {...provided.draggableProps}
                                   {...provided.dragHandleProps}
                                   className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 group transition-shadow ${
-                                    snapshot.isDragging
-                                      ? 'shadow-lg ring-2 ring-purple-500'
-                                      : 'hover:shadow-md'
+                                    snapshot.isDragging ? 'shadow-lg ring-2 ring-purple-500' : 'hover:shadow-md'
                                   }`}
                                 >
                                   <div className="flex items-center justify-between">
-                                    <span className="text-gray-800 text-sm font-medium line-through opacity-60">
-                                      {task.text}
-                                    </span>
-                                    <button
-                                      onClick={() =>
-                                        removeTask(task.id, 'completed')
-                                      }
-                                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all"
-                                    >
+                                    <span className="text-gray-800 text-sm font-medium line-through opacity-60">{task.text}</span>
+                                    <button onClick={() => removeTask(task.id, 'completed')} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all">
                                       <X size={16} />
                                     </button>
                                   </div>
