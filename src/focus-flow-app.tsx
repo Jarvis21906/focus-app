@@ -45,7 +45,7 @@ const FocusFlowApp = () => {
   useEffect(() => {
     // Create a silent audio element to help unlock audio on mobile
     const audio = new Audio();
-    audio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAASAAAeMwAUFBQUFCIiIiIiIjAwMDAwPz8/Pz8/TU1NTU1NW1tbW1tbaGhoaGhoaHd3d3d3d4aGhoaGhpSUlJSUlKGhoaGhoa+vr6+vr7+/v7+/v8rKysrKytTU1NTU1N/f39/f3+7u7u7u7v///////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAYAAAAAAAAAHjOZTf9C//MUZAAAAAGkAAAAAAAAA0gAAAAATEFN//MUZAMAAAGkAAAAAAAAA0gAAAAARTEFN//MUZAYAAAGkAAAAAAAAA0gAAAAARTEFN//MUZAkAAAGkAAAAAAAAA0gAAAAARTEFN';
+    audio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAASAAAeMwAUFBQUFCIiIiIiIjAwMDAwPz8/Pz8/TU1NTU1NW1tbW1tbaGhoaGhoaHd3d3d3d4aGhoaGhpSUlJSUlKGhoaGhoa+vr6+vr7+/v7+/v8rKysrKytTU1NTU1N/f39/f3+7u7u7u7v///////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAYAAAAAAAAAHjOZTf9C//MUZAAAAAGkAAAAAAAAA0gAAAAATEFN//MUZAMAAAGkAAAAAAAAA0gAAAAARTEFN//MUZAYAAAGkAAAAAAAAA0gAAAAARTEFN//MUZAkAAAGkAAAAAAAAA0gAAAAARTEFN//MUZAkAAAGkAAAAAAAAA0gAAAAARTEFN//MUZAkAAAGkAAAAAAAAA0gAAAAARTEFN';
     audio.loop = true;
     unlockAudioRef.current = audio;
     return () => {
@@ -304,17 +304,24 @@ const FocusFlowApp = () => {
                     <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                     <span>Work Session</span>
                   </div>
-                  <select
-                    value={sessionType}
-                    onChange={(e) => setSessionType(e.target.value as SessionType)}
-                    className="bg-white border border-gray-200 text-gray-700 py-2 px-4 rounded-lg focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
-                  >
-                    <option value="work">Work</option>
-                    <option value="study">Study</option>
-                    <option value="break">Break</option>
-                    <option value="exercise">Exercise</option>
-                    <option value="meditation">Meditation</option>
-                  </select>
+                  <div className="flex flex-col items-center">
+                    <label htmlFor="sessionType" className="text-sm text-gray-600 mb-2">
+                      Session Type
+                    </label>
+                    <select
+                      id="sessionType"
+                      value={sessionType}
+                      onChange={(e) => setSessionType(e.target.value as SessionType)}
+                      className="bg-white border border-gray-200 text-gray-700 py-2 px-4 rounded-lg focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                      aria-label="Select session type"
+                    >
+                      <option value="work">Work</option>
+                      <option value="study">Study</option>
+                      <option value="break">Break</option>
+                      <option value="exercise">Exercise</option>
+                      <option value="meditation">Meditation</option>
+                    </select>
+                  </div>
                 </div>
               </div>
             </div>
@@ -330,7 +337,7 @@ const FocusFlowApp = () => {
               <div className="space-y-6">
                 <div>
                   <div className="flex justify-between items-center mb-3">
-                    <label className="text-sm text-gray-600 font-medium">
+                    <label htmlFor="baseFreq" className="text-sm text-gray-600 font-medium">
                       Base Frequency
                     </label>
                     <span className="text-sm text-gray-800 font-semibold">
@@ -339,12 +346,17 @@ const FocusFlowApp = () => {
                   </div>
                   <div className="relative">
                     <input
+                      id="baseFreq"
                       type="range"
                       min="200"
                       max="800"
                       value={baseFreq}
                       onChange={(e) => setBaseFreq(Number(e.target.value))}
                       className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer slider"
+                      aria-label="Base frequency in hertz"
+                      aria-valuemin={200}
+                      aria-valuemax={800}
+                      aria-valuenow={baseFreq}
                     />
                     <div
                       className="absolute left-0 top-0 h-2 bg-purple-600 rounded-lg pointer-events-none"
@@ -354,7 +366,7 @@ const FocusFlowApp = () => {
                 </div>
                 <div>
                   <div className="flex justify-between items-center mb-3">
-                    <label className="text-sm text-gray-600 font-medium">
+                    <label htmlFor="beatFreq" className="text-sm text-gray-600 font-medium">
                       Beat Frequency
                     </label>
                     <span className="text-sm text-gray-800 font-semibold">
@@ -363,12 +375,17 @@ const FocusFlowApp = () => {
                   </div>
                   <div className="relative">
                     <input
+                      id="beatFreq"
                       type="range"
                       min="1"
                       max="40"
                       value={beatFreq}
                       onChange={(e) => setBeatFreq(Number(e.target.value))}
                       className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer slider"
+                      aria-label="Beat frequency in hertz"
+                      aria-valuemin={1}
+                      aria-valuemax={40}
+                      aria-valuenow={beatFreq}
                     />
                     <div
                       className="absolute left-0 top-0 h-2 bg-purple-600 rounded-lg pointer-events-none"
@@ -378,7 +395,7 @@ const FocusFlowApp = () => {
                 </div>
                 <div>
                   <div className="flex justify-between items-center mb-3">
-                    <label className="text-sm text-gray-600 font-medium">
+                    <label htmlFor="volume" className="text-sm text-gray-600 font-medium">
                       Volume
                     </label>
                     <span className="text-sm text-gray-800 font-semibold">
@@ -387,12 +404,17 @@ const FocusFlowApp = () => {
                   </div>
                   <div className="relative">
                     <input
+                      id="volume"
                       type="range"
                       min="0"
                       max="100"
                       value={volume}
                       onChange={(e) => setVolume(Number(e.target.value))}
                       className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer slider"
+                      aria-label="Volume percentage"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={volume}
                     />
                     <div
                       className="absolute left-0 top-0 h-2 bg-purple-600 rounded-lg pointer-events-none"
@@ -441,7 +463,7 @@ const FocusFlowApp = () => {
                   </button>
                   <button
                     onClick={clearAllTasks}
-                    className="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-xl font-medium transition-colors shadow-md"
+                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-xl font-medium transition-colors shadow-md"
                   >
                     Clear All
                   </button>
