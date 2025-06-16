@@ -259,7 +259,7 @@ const FocusFlowApp = () => {
             <h1 className="text-4xl font-bold text-white">PomoMind</h1>
           </div>
           <p className="text-purple-100 text-lg">
-            Boost your productivity with Pomodoro and Binaural Beats
+            Free online Pomodoro timer with task management and binaural beats. Perfect for deep work, study sessions, and ADHD focus.
           </p>
         </div>
 
